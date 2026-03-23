@@ -1,0 +1,94 @@
+[
+  {
+    "id": "1",
+    "name": "query_knowledge",
+    "description": "Search the knowledge base for information about the codebase, documentation, or work history. Use this when someone asks a technical question, wants to know about code, or asks about recent work.",
+    "method": "POST",
+    "url": "https://YOUR_DOMAIN/api/rag/query",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "description": "The search query - rephrase the user's question as a clear search query",
+        "required": true,
+        "location": "body"
+      },
+      {
+        "name": "n_results",
+        "type": "integer",
+        "description": "Number of results to return (default 5)",
+        "required": false,
+        "location": "body"
+      }
+    ]
+  },
+  {
+    "id": "2",
+    "name": "query_git_history",
+    "description": "Search recent git history for information about what was done recently. Use this when someone asks 'what did you do yesterday', 'what changed recently', 'summarize recent work', or similar questions about development activity.",
+    "method": "POST",
+    "url": "https://YOUR_DOMAIN/api/rag/query/git",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "description": "The search query about recent development activity",
+        "required": true,
+        "location": "body"
+      },
+      {
+        "name": "n_results",
+        "type": "integer",
+        "description": "Number of results to return (default 10)",
+        "required": false,
+        "location": "body"
+      }
+    ]
+  },
+  {
+    "id": "3",
+    "name": "query_code",
+    "description": "Search the codebase for specific code, functions, classes, or technical implementation details. Use this when someone asks about how something is implemented, what a function does, or wants code details.",
+    "method": "POST",
+    "url": "https://YOUR_DOMAIN/api/rag/query/code",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "description": "The search query about code or implementation",
+        "required": true,
+        "location": "body"
+      },
+      {
+        "name": "n_results",
+        "type": "integer",
+        "description": "Number of results to return (default 5)",
+        "required": false,
+        "location": "body"
+      }
+    ]
+  },
+  {
+    "id": "4",
+    "name": "query_docs",
+    "description": "Search project documentation for architecture, design decisions, guides, and reference information. Use this when someone asks about project documentation, architecture, or design decisions.",
+    "method": "POST",
+    "url": "https://YOUR_DOMAIN/api/rag/query/docs",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "description": "The search query about documentation",
+        "required": true,
+        "location": "body"
+      },
+      {
+        "name": "n_results",
+        "type": "integer",
+        "description": "Number of results to return (default 5)",
+        "required": false,
+        "location": "body"
+      }
+    ]
+  }
+]

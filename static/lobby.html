@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepVoice — Lobby</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface-2: #1a1a26;
+      --border: #2a2a3a;
+      --border-active: #6366f1;
+      --text: #e4e4eb;
+      --text-dim: #8888a0;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --green: #22c55e;
+      --green-dim: #16a34a;
+      --red: #ef4444;
+      --red-dim: #dc2626;
+      --amber: #f59e0b;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      padding: 40px 20px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .header h1 {
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+    .header h1 .bracket { color: var(--text-dim); font-weight: 400; }
+    .header h1 .highlight { color: var(--accent); }
+    .header p {
+      color: var(--text-dim);
+      font-size: 15px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 16px;
+    }
+
+    /* Divider with label */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .divider span {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    /* Form elements */
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .field input {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .field input:focus {
+      border-color: var(--accent);
+    }
+    .field input::placeholder {
+      color: #555568;
+    }
+
+    /* Join row: input + button side by side */
+    .join-row {
+      display: flex;
+      gap: 10px;
+    }
+    .join-row input {
+      flex: 1;
+      padding: 11px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      letter-spacing: 1px;
+    }
+    .join-row input:focus {
+      border-color: var(--accent);
+    }
+    .join-row input::placeholder {
+      color: #555568;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      letter-spacing: 0;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      width: 100%;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+    .btn-primary:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--border);
+      border-color: var(--text-dim);
+    }
+    .btn-join {
+      background: var(--accent);
+      color: #fff;
+      padding: 11px 20px;
+    }
+    .btn-join:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    /* Recent rooms */
+    .recent-rooms {
+      margin-top: 20px;
+    }
+    .recent-rooms-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+    .recent-room-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .recent-room-item:hover {
+      border-color: var(--accent);
+      background: #1e1e2e;
+    }
+    .recent-room-code {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: var(--text);
+    }
+    .recent-room-time {
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .recent-room-arrow {
+      color: var(--text-dim);
+      font-size: 14px;
+      transition: color 0.15s;
+    }
+    .recent-room-item:hover .recent-room-arrow {
+      color: var(--accent);
+    }
+    .recent-room-meta {
+      display: flex;
+      flex-direction: column;
+    }
+    .no-recent {
+      font-size: 13px;
+      color: #555568;
+      text-align: center;
+      padding: 12px;
+    }
+
+    /* Info card */
+    .info-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      margin-bottom: 16px;
+    }
+    .info-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+    .info-steps {
+      list-style: none;
+      padding: 0;
+    }
+    .info-steps li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+    .info-steps li:last-child {
+      margin-bottom: 0;
+    }
+    .step-num {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      min-width: 22px;
+      border-radius: 6px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    /* Agent status footer */
+    .agent-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 8px;
+      padding: 14px 20px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+    .agent-name {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      flex-shrink: 0;
+    }
+    .status-dot.online {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+    .status-dot.offline {
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+    }
+    .status-dot.checking {
+      background: var(--amber);
+      animation: pulse 1.2s infinite;
+    }
+    .status-label {
+      font-weight: 500;
+    }
+    .status-label.online { color: var(--green); }
+    .status-label.offline { color: var(--red); }
+    .status-label.checking { color: var(--amber); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Validation state */
+    .field input.error,
+    .join-row input.error {
+      border-color: var(--red);
+    }
+    .field .error-msg {
+      font-size: 12px;
+      color: var(--red);
+      margin-top: 4px;
+      display: none;
+    }
+    .field .error-msg.visible {
+      display: block;
+    }
+
+    /* Subtle entrance animation */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .card, .info-card, .agent-status {
+      animation: fadeUp 0.4s ease-out both;
+    }
+    .info-card { animation-delay: 0.08s; }
+    .agent-status { animation-delay: 0.16s; }
+
+    /* Responsive */
+    @media (max-width: 520px) {
+      .container { padding: 24px 16px; }
+      .header h1 { font-size: 28px; }
+      .card { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <h1>Deep<span class="bracket">[</span><span class="highlight">Voice</span><span class="bracket">]</span></h1>
+      <p>AI-Powered Meeting Room</p>
+    </div>
+
+    <!-- Main action card -->
+    <div class="card">
+      <div class="field">
+        <label for="userName">Your Name</label>
+        <input type="text" id="userName" placeholder="Enter your name" autocomplete="name" />
+        <div class="error-msg" id="nameError">Please enter your name.</div>
+      </div>
+
+      <div class="divider"><span>Create New Meeting</span></div>
+
+      <button class="btn btn-primary" id="btnCreate" onclick="createMeeting()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/>
+        </svg>
+        Start New Meeting
+      </button>
+
+      <div class="divider"><span>Or Join Existing</span></div>
+
+      <div class="field" style="margin-bottom: 0;">
+        <label for="roomCodeInput">Room Code</label>
+        <div class="join-row">
+          <input type="text" id="roomCodeInput" placeholder="abc-defg-hij" maxlength="14"
+                 onkeydown="if(event.key==='Enter') joinMeeting();" />
+          <button class="btn btn-join" onclick="joinMeeting()">Join</button>
+        </div>
+        <div class="error-msg" id="codeError">Please enter a valid room code.</div>
+      </div>
+
+      <!-- Recent Rooms -->
+      <div class="recent-rooms" id="recentRoomsSection">
+        <div class="recent-rooms-title">Recent Rooms</div>
+        <div id="recentRoomsList"></div>
+      </div>
+    </div>
+
+    <!-- How it works -->
+    <div class="info-card">
+      <h3>How it works</h3>
+      <ul class="info-steps">
+        <li>
+          <span class="step-num">1</span>
+          <span>Create a new room or join an existing one with a room code</span>
+        </li>
+        <li>
+          <span class="step-num">2</span>
+          <span>DeepVoice AI joins your meeting automatically as a participant</span>
+        </li>
+        <li>
+          <span class="step-num">3</span>
+          <span>Ask about code, documentation, git history, and more by voice</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Agent status -->
+    <div class="agent-status">
+      <span class="agent-name">Agent: deepvoice-orangutan</span>
+      <div class="status-dot checking" id="agentDot"></div>
+      <span class="status-label checking" id="agentLabel">Checking...</span>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Room code generator ──────────────────────────────────
+    function generateRoomCode() {
+      const chars = 'abcdefghijklmnopqrstuvwxyz';
+      const seg = (n) => Array.from({length: n}, () => chars[Math.floor(Math.random() * 26)]).join('');
+      return `${seg(3)}-${seg(4)}-${seg(3)}`;
+    }
+
+    // ── Normalize room code (strip hyphens, then re-insert) ─
+    function normalizeRoomCode(code) {
+      const raw = code.toLowerCase().replace(/[^a-z]/g, '');
+      if (raw.length !== 10) return null;
+      return `${raw.slice(0, 3)}-${raw.slice(3, 7)}-${raw.slice(7, 10)}`;
+    }
+
+    // ── Name persistence ─────────────────────────────────────
+    const nameInput = document.getElementById('userName');
+    const savedName = localStorage.getItem('deepvoice_username');
+    if (savedName) nameInput.value = savedName;
+
+    nameInput.addEventListener('input', () => {
+      localStorage.setItem('deepvoice_username', nameInput.value.trim());
+      clearError('nameError', nameInput);
+    });
+
+    // ── Error helpers ────────────────────────────────────────
+    function showError(id, inputEl) {
+      document.getElementById(id).classList.add('visible');
+      if (inputEl) inputEl.classList.add('error');
+    }
+    function clearError(id, inputEl) {
+      document.getElementById(id).classList.remove('visible');
+      if (inputEl) inputEl.classList.remove('error');
+    }
+
+    document.getElementById('roomCodeInput').addEventListener('input', function () {
+      clearError('codeError', this);
+    });
+
+    // ── Validate name ────────────────────────────────────────
+    function validateName() {
+      const name = nameInput.value.trim();
+      if (!name) {
+        showError('nameError', nameInput);
+        nameInput.focus();
+        return null;
+      }
+      clearError('nameError', nameInput);
+      return name;
+    }
+
+    // ── Create meeting ───────────────────────────────────────
+    function createMeeting() {
+      const name = validateName();
+      if (!name) return;
+
+      const code = generateRoomCode();
+      saveRecentRoom(code);
+      window.location.href = `/meet.html?room=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}`;
+    }
+
+    // ── Join meeting ─────────────────────────────────────────
+    function joinMeeting() {
+      const name = validateName();
+      if (!name) return;
+
+      const codeInput = document.getElementById('roomCodeInput');
+      const rawCode = codeInput.value.trim();
+
+      if (!rawCode) {
+        showError('codeError', codeInput);
+        codeInput.focus();
+        return;
+      }
+
+      const code = normalizeRoomCode(rawCode);
+      if (!code) {
+        showError('codeError', codeInput);
+        codeInput.focus();
+        return;
+      }
+
+      clearError('codeError', codeInput);
+      saveRecentRoom(code);
+      window.location.href = `/meet.html?room=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}`;
+    }
+
+    // ── Recent rooms (localStorage) ──────────────────────────
+    function getRecentRooms() {
+      try {
+        return JSON.parse(localStorage.getItem('deepvoice_recent_rooms') || '[]');
+      } catch {
+        return [];
+      }
+    }
+
+    function saveRecentRoom(code) {
+      let rooms = getRecentRooms();
+      // Remove duplicate if exists
+      rooms = rooms.filter(r => r.code !== code);
+      // Prepend new entry
+      rooms.unshift({ code, time: Date.now() });
+      // Keep only last 5
+      rooms = rooms.slice(0, 5);
+      localStorage.setItem('deepvoice_recent_rooms', JSON.stringify(rooms));
+    }
+
+    function renderRecentRooms() {
+      const rooms = getRecentRooms();
+      const section = document.getElementById('recentRoomsSection');
+      const list = document.getElementById('recentRoomsList');
+
+      if (rooms.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = 'block';
+      list.innerHTML = rooms.map(r => {
+        const when = formatTimeAgo(r.time);
+        return `
+          <div class="recent-room-item" onclick="joinRecentRoom('${r.code}')" title="Join ${r.code}">
+            <div class="recent-room-meta">
+              <span class="recent-room-code">${r.code}</span>
+              <span class="recent-room-time">${when}</span>
+            </div>
+            <span class="recent-room-arrow">&rarr;</span>
+          </div>`;
+      }).join('');
+    }
+
+    function joinRecentRoom(code) {
+      const name = validateName();
+      if (!name) return;
+      saveRecentRoom(code);
+      window.location.href = `/meet.html?room=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}`;
+    }
+
+    function formatTimeAgo(ts) {
+      const diff = Date.now() - ts;
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'Just now';
+      if (mins < 60) return `${mins}m ago`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      if (days === 1) return 'Yesterday';
+      if (days < 7) return `${days}d ago`;
+      return new Date(ts).toLocaleDateString();
+    }
+
+    // ── Agent health check ───────────────────────────────────
+    async function checkAgentHealth() {
+      const dot = document.getElementById('agentDot');
+      const label = document.getElementById('agentLabel');
+
+      try {
+        const resp = await fetch('/api/health', { signal: AbortSignal.timeout(5000) });
+        if (resp.ok) {
+          dot.className = 'status-dot online';
+          label.className = 'status-label online';
+          label.textContent = 'Online';
+        } else {
+          throw new Error('Not OK');
+        }
+      } catch {
+        dot.className = 'status-dot offline';
+        label.className = 'status-label offline';
+        label.textContent = 'Offline';
+      }
+    }
+
+    // ── Init ─────────────────────────────────────────────────
+    renderRecentRooms();
+    checkAgentHealth();
+
+    // Re-check health every 30 seconds
+    setInterval(checkAgentHealth, 30000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepVoice — Meeting Agent</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface-2: #1a1a26;
+      --border: #2a2a3a;
+      --border-active: #6366f1;
+      --text: #e4e4eb;
+      --text-dim: #8888a0;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --green: #22c55e;
+      --green-dim: #16a34a;
+      --red: #ef4444;
+      --red-dim: #dc2626;
+      --amber: #f59e0b;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 640px;
+      padding: 40px 20px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    .header h1 span { color: var(--accent); }
+    .header p {
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+
+    /* Status badge */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 32px;
+      padding: 10px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 13px;
+      width: fit-content;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      flex-shrink: 0;
+    }
+    .status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .status-dot.connecting { background: var(--amber); animation: pulse 1.2s infinite; }
+    .status-dot.error { background: var(--red); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+
+    /* Form */
+    .field { margin-bottom: 16px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .field input {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .field input:focus {
+      border-color: var(--accent);
+    }
+    .field input::placeholder {
+      color: #555568;
+    }
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-danger {
+      background: var(--red);
+      color: #fff;
+    }
+    .btn-danger:hover:not(:disabled) { background: var(--red-dim); }
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    /* Log */
+    .log-area {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      max-height: 260px;
+      overflow-y: auto;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+    .log-area::-webkit-scrollbar { width: 6px; }
+    .log-area::-webkit-scrollbar-track { background: transparent; }
+    .log-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .log-entry { padding: 1px 0; }
+    .log-time { color: #555568; }
+    .log-info { color: var(--accent); }
+    .log-ok { color: var(--green); }
+    .log-err { color: var(--red); }
+    .log-warn { color: var(--amber); }
+
+    /* Info section */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .info-item {
+      background: var(--surface-2);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .info-item .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    .info-item .value {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    /* RAG section */
+    .rag-section { margin-top: 8px; }
+    .rag-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .rag-row input { flex: 1; }
+    .btn-sm {
+      padding: 10px 16px;
+      font-size: 13px;
+      border-radius: 8px;
+      white-space: nowrap;
+      width: auto;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="header">
+      <h1>Deep<span>Voice</span></h1>
+      <p>AI Meeting Agent — Google Meet Bridge</p>
+      <a href="/lobby.html" style="display:inline-block;margin-top:12px;padding:8px 20px;background:var(--accent);color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;transition:background 0.15s;" onmouseover="this.style.background='var(--accent-hover)'" onmouseout="this.style.background='var(--accent)'">Open Meeting Room</a>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Disconnected</span>
+    </div>
+
+    <!-- Connect card -->
+    <div class="card" id="connectCard">
+      <div class="card-title">Connect to Meeting</div>
+      <div class="field">
+        <label>Google Meet URL</label>
+        <input type="url" id="meetUrl" placeholder="https://meet.google.com/abc-defg-hij" />
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Bot Name</label>
+          <input type="text" id="botName" value="DeepVoice AI" />
+        </div>
+        <div class="field">
+          <label>Room Code (optional)</label>
+          <input type="text" id="roomCode" placeholder="e.g. my-room" />
+        </div>
+      </div>
+      <div style="margin-top: 20px;">
+        <button class="btn btn-primary" id="btnConnect" onclick="connectMeeting()">
+          Join Meeting
+        </button>
+      </div>
+    </div>
+
+    <!-- Active session card -->
+    <div class="card hidden" id="sessionCard">
+      <div class="card-title">Active Session</div>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="label">Meeting</div>
+          <div class="value" id="infoMeetUrl">—</div>
+        </div>
+        <div class="info-item">
+          <div class="label">LiveKit Room</div>
+          <div class="value" id="infoRoom">—</div>
+        </div>
+        <div class="info-item">
+          <div class="label">Bot Name</div>
+          <div class="value" id="infoBotName">—</div>
+        </div>
+        <div class="info-item">
+          <div class="label">Duration</div>
+          <div class="value" id="infoDuration">0:00</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-danger" onclick="disconnectMeeting()">Leave Meeting</button>
+        <button class="btn btn-primary" onclick="checkStatus()">Refresh Status</button>
+      </div>
+    </div>
+
+    <!-- Index repo card -->
+    <div class="card">
+      <div class="card-title">Knowledge Base</div>
+      <div class="rag-section">
+        <div class="field">
+          <label>Index a Repository</label>
+          <div class="rag-row">
+            <input type="text" id="repoPath" placeholder="/path/to/your/repo" />
+            <button class="btn btn-primary btn-sm" onclick="indexRepo()">Index</button>
+          </div>
+        </div>
+        <div style="margin-top: 12px;">
+          <button class="btn btn-primary btn-sm" style="width:100%;" onclick="fetchStats()">Show Stats</button>
+        </div>
+        <div id="statsArea" class="hidden" style="margin-top:12px;">
+          <div class="info-grid" id="statsGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log card -->
+    <div class="card">
+      <div class="card-title">Activity Log</div>
+      <div class="log-area" id="logArea">
+        <div class="log-entry"><span class="log-time">—</span> <span class="log-info">Ready. Enter a Google Meet URL to start.</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const API = window.location.origin;
+    let sessionTimer = null;
+    let sessionStart = null;
+
+    // ── Logging ───────────────────────────────────────────────
+    function log(msg, level = 'info') {
+      const area = document.getElementById('logArea');
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+      const cls = { info: 'log-info', ok: 'log-ok', error: 'log-err', warn: 'log-warn' }[level] || 'log-info';
+      area.innerHTML += `<div class="log-entry"><span class="log-time">${time}</span> <span class="${cls}">${msg}</span></div>`;
+      area.scrollTop = area.scrollHeight;
+    }
+
+    // ── Status ────────────────────────────────────────────────
+    function setStatus(state, text) {
+      const dot = document.getElementById('statusDot');
+      const txt = document.getElementById('statusText');
+      dot.className = 'status-dot ' + state;
+      txt.textContent = text;
+    }
+
+    function showSession(meetUrl, room, botName) {
+      document.getElementById('connectCard').classList.add('hidden');
+      document.getElementById('sessionCard').classList.remove('hidden');
+      document.getElementById('infoMeetUrl').textContent = meetUrl.replace('https://meet.google.com/', '');
+      document.getElementById('infoRoom').textContent = room || '—';
+      document.getElementById('infoBotName').textContent = botName;
+      sessionStart = Date.now();
+      sessionTimer = setInterval(updateDuration, 1000);
+    }
+
+    function hideSession() {
+      document.getElementById('connectCard').classList.remove('hidden');
+      document.getElementById('sessionCard').classList.add('hidden');
+      if (sessionTimer) { clearInterval(sessionTimer); sessionTimer = null; }
+    }
+
+    function updateDuration() {
+      if (!sessionStart) return;
+      const s = Math.floor((Date.now() - sessionStart) / 1000);
+      const m = Math.floor(s / 60);
+      const sec = String(s % 60).padStart(2, '0');
+      document.getElementById('infoDuration').textContent = `${m}:${sec}`;
+    }
+
+    // ── Connect ───────────────────────────────────────────────
+    async function connectMeeting() {
+      const meetUrl = document.getElementById('meetUrl').value.trim();
+      const botName = document.getElementById('botName').value.trim() || 'DeepVoice AI';
+      const roomCode = document.getElementById('roomCode').value.trim() || null;
+
+      if (!meetUrl) { log('Enter a Google Meet URL.', 'warn'); return; }
+      if (!meetUrl.includes('meet.google.com')) { log('Invalid Google Meet URL.', 'error'); return; }
+
+      const btn = document.getElementById('btnConnect');
+      btn.disabled = true;
+      btn.textContent = 'Connecting...';
+      setStatus('connecting', 'Connecting...');
+      log('Starting audio bridge...');
+
+      try {
+        const payload = { meeting_url: meetUrl, participant_name: botName };
+        if (roomCode) payload.room_code = roomCode;
+
+        const resp = await fetch(`${API}/api/bridge/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || resp.statusText);
+        }
+
+        const data = await resp.json();
+        log(`Audio bridge connected. LiveKit room: ${data.livekit_room || 'N/A'}`, 'ok');
+        log(`Launching browser bot to join ${meetUrl}...`);
+
+        // Start the Playwright bot via the bot endpoint
+        const botResp = await fetch(`${API}/api/bridge/bot/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ meeting_url: meetUrl, bot_name: botName }),
+        });
+
+        if (botResp.ok) {
+          log('Browser bot launched. Joining meeting...', 'ok');
+        } else {
+          log('Bridge connected but browser bot failed. Use the CLI to join manually.', 'warn');
+        }
+
+        setStatus('connected', 'Connected');
+        showSession(meetUrl, data.livekit_room, botName);
+
+      } catch (e) {
+        log(`Failed: ${e.message}`, 'error');
+        setStatus('error', 'Failed');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Join Meeting';
+      }
+    }
+
+    // ── Disconnect ────────────────────────────────────────────
+    async function disconnectMeeting() {
+      log('Stopping bridge and leaving meeting...');
+      setStatus('connecting', 'Disconnecting...');
+
+      try {
+        await fetch(`${API}/api/bridge/bot/stop`, { method: 'POST' }).catch(() => {});
+        await fetch(`${API}/api/bridge/stop`, { method: 'POST' });
+        log('Disconnected.', 'ok');
+      } catch (e) {
+        log(`Error stopping: ${e.message}`, 'warn');
+      }
+
+      setStatus('', 'Disconnected');
+      hideSession();
+    }
+
+    // ── Status check ──────────────────────────────────────────
+    async function checkStatus() {
+      try {
+        const resp = await fetch(`${API}/api/bridge/status`);
+        const data = await resp.json();
+        if (data.active) {
+          setStatus('connected', 'Connected');
+          log('Bridge is active.', 'ok');
+        } else {
+          setStatus('', 'Disconnected');
+          hideSession();
+          log('No active bridge.', 'warn');
+        }
+      } catch (e) {
+        log(`Status check failed: ${e.message}`, 'error');
+      }
+    }
+
+    // ── Index repo ────────────────────────────────────────────
+    async function indexRepo() {
+      const path = document.getElementById('repoPath').value.trim();
+      if (!path) { log('Enter a repository path.', 'warn'); return; }
+
+      log(`Indexing repository: ${path}...`);
+
+      try {
+        // Index code
+        await fetch(`${API}/api/index/repository`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repo_path: path, collection: 'code' }),
+        });
+        log('Code indexing started.', 'ok');
+
+        // Index git history
+        await fetch(`${API}/api/index/git-history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repo_path: path, days: 30 }),
+        });
+        log('Git history indexing started.', 'ok');
+
+      } catch (e) {
+        log(`Indexing failed: ${e.message}`, 'error');
+      }
+    }
+
+    // ── Stats ─────────────────────────────────────────────────
+    async function fetchStats() {
+      try {
+        const resp = await fetch(`${API}/api/index/stats`);
+        const data = await resp.json();
+
+        const grid = document.getElementById('statsGrid');
+        grid.innerHTML = '';
+
+        for (const [name, count] of Object.entries(data.collections || {})) {
+          grid.innerHTML += `
+            <div class="info-item">
+              <div class="label">${name}</div>
+              <div class="value">${count} docs</div>
+            </div>`;
+        }
+        grid.innerHTML += `
+          <div class="info-item">
+            <div class="label">Total</div>
+            <div class="value">${data.total_documents || 0} docs</div>
+          </div>`;
+
+        document.getElementById('statsArea').classList.remove('hidden');
+        log(`Knowledge base: ${data.total_documents || 0} total documents.`, 'ok');
+      } catch (e) {
+        log(`Failed to fetch stats: ${e.message}`, 'error');
+      }
+    }
+
+    // ── Init: check if bridge is already active ───────────────
+    checkStatus();
+  </script>
+</body>
+</html>

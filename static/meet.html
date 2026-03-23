@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepVoice Meeting</title>
+  <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface-2: #1a1a26;
+      --border: #2a2a3a;
+      --border-active: #6366f1;
+      --text: #e4e4eb;
+      --text-dim: #8888a0;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --accent-glow: rgba(99, 102, 241, 0.25);
+      --green: #22c55e;
+      --green-dim: #16a34a;
+      --red: #ef4444;
+      --red-dim: #dc2626;
+      --amber: #f59e0b;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top Bar ─────────────────────────────────────────────── */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .top-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      white-space: nowrap;
+    }
+    .logo span { color: var(--accent); }
+
+    .room-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 13px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      color: var(--text-dim);
+    }
+
+    .room-badge .room-code {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .btn-copy {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 2px;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+    .btn-copy:hover { color: var(--accent); }
+    .btn-copy.copied { color: var(--green); }
+
+    .top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .agent-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-dim);
+      transition: all 0.3s;
+    }
+
+    .agent-status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      transition: all 0.3s;
+    }
+
+    .agent-status.connected .agent-status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .agent-status.speaking .agent-status-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse-dot 0.8s infinite; }
+    .agent-status.listening .agent-status-dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.3); }
+    }
+
+    .participant-count {
+      font-size: 13px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .participant-count svg { opacity: 0.6; }
+
+    .btn-leave-top {
+      padding: 7px 16px;
+      background: var(--red);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-leave-top:hover { background: var(--red-dim); }
+
+    /* ── Main Content ────────────────────────────────────────── */
+    .main-content {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Video Grid Area ─────────────────────────────────────── */
+    .video-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .video-grid {
+      flex: 1;
+      display: grid;
+      gap: 10px;
+      padding: 16px;
+      overflow: auto;
+      align-content: center;
+      justify-content: center;
+    }
+
+    /* Dynamic grid layouts */
+    .video-grid[data-count="1"] {
+      grid-template-columns: 1fr;
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .video-grid[data-count="2"] {
+      grid-template-columns: 1fr 1fr;
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .video-grid[data-count="3"],
+    .video-grid[data-count="4"] {
+      grid-template-columns: 1fr 1fr;
+    }
+    .video-grid[data-count="5"],
+    .video-grid[data-count="6"] {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+    .video-grid[data-count="7"],
+    .video-grid[data-count="8"],
+    .video-grid[data-count="9"] {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    .participant-tile {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      aspect-ratio: 16 / 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.3s;
+      min-height: 0;
+    }
+
+    .participant-tile.speaking {
+      border-color: var(--accent);
+      box-shadow: 0 0 16px var(--accent-glow), inset 0 0 16px var(--accent-glow);
+    }
+
+    .participant-tile.local {
+      border-color: var(--border-active);
+    }
+
+    .participant-tile video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .participant-tile .no-video {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+    }
+
+    .avatar {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 700;
+      color: #fff;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    .avatar-ring {
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      transition: all 0.3s;
+    }
+
+    .participant-tile.speaking .avatar-ring {
+      border-color: var(--accent);
+      animation: audioWave 1.5s ease-in-out infinite;
+    }
+
+    .participant-tile.speaking .avatar-ring::before,
+    .participant-tile.speaking .avatar-ring::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      opacity: 0;
+      animation: audioRipple 1.5s ease-in-out infinite;
+    }
+
+    .participant-tile.speaking .avatar-ring::after {
+      animation-delay: 0.5s;
+    }
+
+    @keyframes audioWave {
+      0%, 100% { transform: scale(1); opacity: 0.5; }
+      50% { transform: scale(1.15); opacity: 1; }
+    }
+
+    @keyframes audioRipple {
+      0% { transform: scale(1); opacity: 0.6; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    .participant-name {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 8px 12px;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .participant-name .muted-icon {
+      color: var(--red);
+      flex-shrink: 0;
+    }
+
+    .participant-name .you-badge {
+      font-size: 11px;
+      padding: 1px 6px;
+      background: var(--accent);
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    /* ── Transcript Panel ────────────────────────────────────── */
+    .transcript-panel {
+      width: 340px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      transition: width 0.3s, opacity 0.3s;
+    }
+
+    .transcript-panel.collapsed {
+      width: 0;
+      overflow: hidden;
+      border-left: none;
+      opacity: 0;
+    }
+
+    .transcript-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .transcript-header h3 {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .btn-close-transcript {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      border-radius: 4px;
+      transition: background 0.15s;
+    }
+    .btn-close-transcript:hover { background: var(--surface-2); }
+
+    .transcript-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .transcript-messages::-webkit-scrollbar { width: 5px; }
+    .transcript-messages::-webkit-scrollbar-track { background: transparent; }
+    .transcript-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .transcript-msg {
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 92%;
+      animation: fadeSlideIn 0.25s ease;
+    }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .transcript-msg.agent {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      align-self: flex-start;
+    }
+
+    .transcript-msg.user {
+      background: var(--accent);
+      color: #fff;
+      align-self: flex-end;
+    }
+
+    .transcript-msg .msg-sender {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 3px;
+      opacity: 0.7;
+    }
+
+    .transcript-msg.user .msg-sender { opacity: 0.85; }
+
+    .transcript-msg .msg-time {
+      font-size: 10px;
+      opacity: 0.5;
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .transcript-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-dim);
+      font-size: 13px;
+      gap: 8px;
+      opacity: 0.5;
+    }
+
+    /* ── Controls Bar ────────────────────────────────────────── */
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 16px 20px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .ctrl-btn {
+      position: relative;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      color: var(--text);
+    }
+
+    .ctrl-btn.active {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+    }
+    .ctrl-btn.active:hover {
+      background: var(--border);
+    }
+
+    .ctrl-btn.muted {
+      background: var(--red);
+      color: #fff;
+    }
+    .ctrl-btn.muted:hover {
+      background: var(--red-dim);
+    }
+
+    .ctrl-btn.leave {
+      background: var(--red);
+      color: #fff;
+      border-radius: 16px;
+      width: auto;
+      padding: 0 24px;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .ctrl-btn.leave:hover { background: var(--red-dim); }
+
+    .ctrl-btn .tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+      border: 1px solid var(--border);
+    }
+    .ctrl-btn:hover .tooltip { opacity: 1; }
+
+    .ctrl-divider {
+      width: 1px;
+      height: 32px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    .btn-toggle-transcript {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+    }
+    .btn-toggle-transcript.panel-open {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* ── Loading / Error States ──────────────────────────────── */
+    .loading-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 20px;
+    }
+
+    .loading-screen .logo-large {
+      font-size: 32px;
+      font-weight: 700;
+    }
+    .loading-screen .logo-large span { color: var(--accent); }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+
+    .error-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 16px;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .error-screen .error-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--red);
+    }
+
+    .error-screen h2 {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .error-screen p {
+      font-size: 14px;
+      color: var(--text-dim);
+      max-width: 400px;
+    }
+
+    .error-screen .btn-retry {
+      margin-top: 8px;
+      padding: 10px 24px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .error-screen .btn-retry:hover { background: var(--accent-hover); }
+
+    .hidden { display: none !important; }
+
+    /* ── Responsive ──────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .transcript-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-width: 360px;
+        z-index: 100;
+        box-shadow: -4px 0 20px rgba(0, 0, 0, 0.5);
+      }
+      .transcript-panel.collapsed {
+        transform: translateX(100%);
+        width: 100%;
+        opacity: 1;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .top-bar {
+        padding: 10px 12px;
+        gap: 8px;
+      }
+      .logo { font-size: 15px; }
+      .room-badge { font-size: 11px; padding: 4px 10px; }
+      .agent-status { display: none; }
+
+      .video-grid { padding: 8px; gap: 6px; }
+
+      .participant-tile {
+        aspect-ratio: 4 / 3;
+      }
+
+      .video-grid[data-count="2"],
+      .video-grid[data-count="3"],
+      .video-grid[data-count="4"] {
+        grid-template-columns: 1fr 1fr;
+      }
+      .video-grid[data-count="5"],
+      .video-grid[data-count="6"],
+      .video-grid[data-count="7"],
+      .video-grid[data-count="8"],
+      .video-grid[data-count="9"] {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .controls-bar { padding: 12px 16px; gap: 8px; }
+      .ctrl-btn { width: 46px; height: 46px; }
+      .ctrl-btn.leave { padding: 0 18px; font-size: 13px; }
+
+      .avatar { width: 56px; height: 56px; font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── Loading Screen ──────────────────────────────────── -->
+  <div id="loadingScreen" class="loading-screen">
+    <div class="logo-large">Deep<span>Voice</span></div>
+    <div class="spinner"></div>
+    <div class="loading-text" id="loadingText">Joining meeting...</div>
+  </div>
+
+  <!-- ─── Error Screen ────────────────────────────────────── -->
+  <div id="errorScreen" class="error-screen hidden">
+    <div class="error-icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+      </svg>
+    </div>
+    <h2 id="errorTitle">Unable to Join</h2>
+    <p id="errorMessage">Something went wrong while connecting to the meeting room.</p>
+    <button class="btn-retry" onclick="location.reload()">Try Again</button>
+    <a href="/" style="color: var(--text-dim); font-size: 13px; margin-top: 4px; text-decoration: none;">Back to Dashboard</a>
+  </div>
+
+  <!-- ─── Meeting UI ──────────────────────────────────────── -->
+  <div id="meetingUI" class="hidden" style="display:none; flex-direction:column; height:100vh;">
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <div class="logo">Deep<span>Voice</span></div>
+        <div class="room-badge">
+          <span>Room:</span>
+          <span class="room-code" id="roomCodeDisplay">---</span>
+          <button class="btn-copy" id="btnCopyLink" onclick="copyRoomLink()" title="Copy invite link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="top-bar-right">
+        <div class="agent-status" id="agentStatus">
+          <div class="agent-status-dot"></div>
+          <span id="agentStatusText">Waiting for agent</span>
+        </div>
+        <div class="participant-count" id="participantCount">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+          </svg>
+          <span id="participantCountText">0</span>
+        </div>
+        <button class="btn-leave-top" onclick="leaveRoom()">Leave</button>
+      </div>
+    </div>
+
+    <!-- Main Content: Video Grid + Transcript -->
+    <div class="main-content">
+      <div class="video-area">
+        <div class="video-grid" id="videoGrid" data-count="0">
+          <!-- Participant tiles will be inserted here -->
+        </div>
+      </div>
+
+      <!-- Transcript Panel -->
+      <div class="transcript-panel" id="transcriptPanel">
+        <div class="transcript-header">
+          <h3>Live Transcript</h3>
+          <button class="btn-close-transcript" onclick="toggleTranscript()" title="Close transcript">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="transcript-messages" id="transcriptMessages">
+          <div class="transcript-empty" id="transcriptEmpty">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            </svg>
+            <span>Transcript will appear here</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Bar -->
+    <div class="controls-bar">
+      <button class="ctrl-btn active" id="btnMic" onclick="toggleMic()">
+        <span class="tooltip" id="micTooltip">Mute</span>
+        <svg id="micOnIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        <svg id="micOffIcon" class="hidden" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2c0 .76-.12 1.5-.35 2.18"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </button>
+
+      <button class="ctrl-btn active" id="btnCamera" onclick="toggleCamera()">
+        <span class="tooltip" id="cameraTooltip">Turn off camera</span>
+        <svg id="camOnIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+        </svg>
+        <svg id="camOffIcon" class="hidden" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16.29 7.71L1 1"/><path d="M16 16V5a2 2 0 00-2-2H5"/><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+          <line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+      </button>
+
+      <div class="ctrl-divider"></div>
+
+      <button class="ctrl-btn btn-toggle-transcript panel-open" id="btnTranscript" onclick="toggleTranscript()">
+        <span class="tooltip">Transcript</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+      </button>
+
+      <div class="ctrl-divider"></div>
+
+      <button class="ctrl-btn leave" onclick="leaveRoom()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16.67 4.33a8 8 0 110 15.34"/><path d="M9 12h12m-3-3l3 3-3 3"/>
+        </svg>
+        Leave
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // ─── State ──────────────────────────────────────────────────
+    let room = null;
+    let micEnabled = true;
+    let cameraEnabled = true;
+    let transcriptOpen = true;
+    let participants = new Map(); // identity -> { tile element, tracks, etc }
+    let agentIdentity = null;
+
+    // ─── URL Params ─────────────────────────────────────────────
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomName = urlParams.get('room');
+    const participantName = urlParams.get('name') || 'Guest';
+
+    // ─── DOM Refs ───────────────────────────────────────────────
+    const $loading = document.getElementById('loadingScreen');
+    const $error = document.getElementById('errorScreen');
+    const $meeting = document.getElementById('meetingUI');
+    const $videoGrid = document.getElementById('videoGrid');
+    const $transcriptMessages = document.getElementById('transcriptMessages');
+    const $transcriptEmpty = document.getElementById('transcriptEmpty');
+    const $transcriptPanel = document.getElementById('transcriptPanel');
+
+    // ─── Init ───────────────────────────────────────────────────
+    (async function init() {
+      if (!roomName) {
+        showError('Missing Room Code', 'No room name was provided in the URL. Please use a valid meeting link with ?room=xxx&name=yyy parameters.');
+        return;
+      }
+
+      try {
+        updateLoading('Requesting access token...');
+        const tokenResp = await fetch('/api/meet/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ room_name: roomName, participant_name: participantName }),
+        });
+
+        if (!tokenResp.ok) {
+          const err = await tokenResp.json().catch(() => ({}));
+          throw new Error(err.detail || `Server returned ${tokenResp.status}`);
+        }
+
+        const { token, livekit_url } = await tokenResp.json();
+
+        if (!token || !livekit_url) {
+          throw new Error('Invalid token response from server.');
+        }
+
+        updateLoading('Connecting to meeting room...');
+        await connectToRoom(livekit_url, token);
+
+      } catch (err) {
+        console.error('Failed to join meeting:', err);
+        showError('Unable to Join Meeting', err.message || 'An unexpected error occurred. Please try again.');
+      }
+    })();
+
+    // ─── LiveKit Connection ─────────────────────────────────────
+    async function connectToRoom(livekitUrl, token) {
+      room = new LivekitClient.Room({
+        adaptiveStream: true,
+        dynacast: true,
+        videoCaptureDefaults: {
+          resolution: LivekitClient.VideoPresets.h720.resolution,
+        },
+      });
+
+      // ── Track Subscribed ──────────────────────────────────────
+      room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        console.log(`Track subscribed: ${track.kind} from ${participant.identity}`);
+        const tile = ensureParticipantTile(participant);
+
+        if (track.kind === 'video') {
+          const videoEl = track.attach();
+          videoEl.style.width = '100%';
+          videoEl.style.height = '100%';
+          videoEl.style.objectFit = 'cover';
+          const noVideo = tile.querySelector('.no-video');
+          if (noVideo) noVideo.classList.add('hidden');
+          // Remove any existing video first
+          tile.querySelectorAll('video').forEach(v => v.remove());
+          tile.insertBefore(videoEl, tile.querySelector('.participant-name'));
+        }
+
+        if (track.kind === 'audio') {
+          const audioEl = track.attach();
+          audioEl.style.display = 'none';
+          document.body.appendChild(audioEl);
+
+          // Detect if this is the agent for status display
+          detectAgent(participant);
+        }
+      });
+
+      // ── Track Unsubscribed ────────────────────────────────────
+      room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+        console.log(`Track unsubscribed: ${track.kind} from ${participant.identity}`);
+        const elements = track.detach();
+        elements.forEach(el => el.remove());
+
+        if (track.kind === 'video') {
+          const tile = getTile(participant.identity);
+          if (tile) {
+            const noVideo = tile.querySelector('.no-video');
+            if (noVideo) noVideo.classList.remove('hidden');
+          }
+        }
+      });
+
+      // ── Participant Connected ─────────────────────────────────
+      room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
+        console.log(`Participant connected: ${participant.identity}`);
+        ensureParticipantTile(participant);
+        updateParticipantCount();
+        detectAgent(participant);
+      });
+
+      // ── Participant Disconnected ──────────────────────────────
+      room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
+        console.log(`Participant disconnected: ${participant.identity}`);
+        removeParticipantTile(participant.identity);
+        updateParticipantCount();
+
+        if (participant.identity === agentIdentity) {
+          agentIdentity = null;
+          setAgentStatus('disconnected', 'Agent disconnected');
+        }
+      });
+
+      // ── Active Speaker Changed ────────────────────────────────
+      room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
+        // Clear all speaking states
+        document.querySelectorAll('.participant-tile.speaking').forEach(t => t.classList.remove('speaking'));
+
+        speakers.forEach(speaker => {
+          const tile = getTile(speaker.identity);
+          if (tile) tile.classList.add('speaking');
+        });
+
+        // Update agent status based on speaking
+        if (agentIdentity) {
+          const agentSpeaking = speakers.some(s => s.identity === agentIdentity);
+          if (agentSpeaking) {
+            setAgentStatus('speaking', 'Agent speaking');
+          } else {
+            setAgentStatus('connected', 'Agent connected');
+          }
+        }
+      });
+
+      // ── Data Received (Transcripts) ───────────────────────────
+      room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant, kind, topic) => {
+        try {
+          const raw = new TextDecoder().decode(payload);
+          const data = JSON.parse(raw);
+
+          if (topic === 'client_actions' && data.type === 'client_action' && data.action === 'send_transcript') {
+            addTranscript(data.speaker || (participant ? participant.identity : 'Unknown'), data.text || data.content || '');
+          } else if (data.type === 'transcript' || data.action === 'send_transcript') {
+            addTranscript(data.speaker || (participant ? participant.identity : 'Unknown'), data.text || data.content || '');
+          }
+        } catch (e) {
+          console.warn('Failed to parse data message:', e);
+        }
+      });
+
+      // ── Track Muted / Unmuted ─────────────────────────────────
+      room.on(LivekitClient.RoomEvent.TrackMuted, (publication, participant) => {
+        if (publication.kind === 'audio') {
+          updateMuteIndicator(participant.identity, true);
+        }
+      });
+
+      room.on(LivekitClient.RoomEvent.TrackUnmuted, (publication, participant) => {
+        if (publication.kind === 'audio') {
+          updateMuteIndicator(participant.identity, false);
+        }
+      });
+
+      // ── Connection State ──────────────────────────────────────
+      room.on(LivekitClient.RoomEvent.Disconnected, (reason) => {
+        console.log('Disconnected from room:', reason);
+        showError('Disconnected', 'You have been disconnected from the meeting. ' + (reason || ''));
+      });
+
+      room.on(LivekitClient.RoomEvent.Reconnecting, () => {
+        updateLoading('Reconnecting...');
+        $meeting.style.display = 'none';
+        $loading.classList.remove('hidden');
+      });
+
+      room.on(LivekitClient.RoomEvent.Reconnected, () => {
+        $loading.classList.add('hidden');
+        $meeting.style.display = 'flex';
+      });
+
+      // ── Connect ───────────────────────────────────────────────
+      updateLoading('Connecting...');
+      await room.connect(livekitUrl, token);
+
+      updateLoading('Enabling media devices...');
+
+      // Enable mic
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+        micEnabled = true;
+      } catch (e) {
+        console.warn('Could not enable microphone:', e);
+        micEnabled = false;
+        updateMicUI();
+      }
+
+      // Enable camera
+      try {
+        await room.localParticipant.setCameraEnabled(true);
+        cameraEnabled = true;
+      } catch (e) {
+        console.warn('Could not enable camera:', e);
+        cameraEnabled = false;
+        updateCameraUI();
+      }
+
+      // Show meeting UI
+      showMeeting();
+
+      // Add local participant tile
+      addLocalParticipantTile();
+
+      // Add existing remote participants
+      room.remoteParticipants.forEach((participant) => {
+        ensureParticipantTile(participant);
+        detectAgent(participant);
+
+        // Attach any existing tracks
+        participant.trackPublications.forEach((pub) => {
+          if (pub.track && pub.isSubscribed) {
+            const tile = ensureParticipantTile(participant);
+            if (pub.track.kind === 'video') {
+              const videoEl = pub.track.attach();
+              videoEl.style.width = '100%';
+              videoEl.style.height = '100%';
+              videoEl.style.objectFit = 'cover';
+              const noVideo = tile.querySelector('.no-video');
+              if (noVideo) noVideo.classList.add('hidden');
+              tile.querySelectorAll('video').forEach(v => v.remove());
+              tile.insertBefore(videoEl, tile.querySelector('.participant-name'));
+            } else if (pub.track.kind === 'audio') {
+              const audioEl = pub.track.attach();
+              audioEl.style.display = 'none';
+              document.body.appendChild(audioEl);
+            }
+          }
+        });
+      });
+
+      updateParticipantCount();
+
+      // Set room code display
+      document.getElementById('roomCodeDisplay').textContent = roomName;
+    }
+
+    // ─── UI State Management ────────────────────────────────────
+    function updateLoading(text) {
+      document.getElementById('loadingText').textContent = text;
+    }
+
+    function showError(title, message) {
+      $loading.classList.add('hidden');
+      $meeting.style.display = 'none';
+      document.getElementById('errorTitle').textContent = title;
+      document.getElementById('errorMessage').textContent = message;
+      $error.classList.remove('hidden');
+    }
+
+    function showMeeting() {
+      $loading.classList.add('hidden');
+      $error.classList.add('hidden');
+      $meeting.classList.remove('hidden');
+      $meeting.style.display = 'flex';
+    }
+
+    // ─── Participant Tiles ──────────────────────────────────────
+    function getInitial(name) {
+      if (!name) return '?';
+      const parts = name.trim().split(/\s+/);
+      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+      return name[0].toUpperCase();
+    }
+
+    function isAgent(participant) {
+      const identity = typeof participant === 'string' ? participant : participant.identity;
+      const name = typeof participant === 'string' ? participant : (participant.name || participant.identity);
+      const lower = (identity + ' ' + name).toLowerCase();
+      return lower.includes('agent') || lower.includes('vocal') || lower.includes('deepvoice') || lower.includes('bridge') || lower.includes('bot');
+    }
+
+    function detectAgent(participant) {
+      if (isAgent(participant) && !agentIdentity) {
+        agentIdentity = participant.identity;
+        setAgentStatus('connected', 'Agent connected');
+      }
+    }
+
+    function ensureParticipantTile(participant) {
+      const identity = participant.identity;
+      let tile = getTile(identity);
+      if (tile) return tile;
+
+      const name = participant.name || participant.identity;
+      const initial = getInitial(name);
+      const isAgentParticipant = isAgent(participant);
+
+      tile = document.createElement('div');
+      tile.className = 'participant-tile' + (isAgentParticipant ? ' agent' : '');
+      tile.dataset.identity = identity;
+      tile.innerHTML = `
+        <div class="no-video">
+          <div class="avatar" style="${isAgentParticipant ? 'background: linear-gradient(135deg, var(--accent), #a855f7);' : ''}">
+            <div class="avatar-ring"></div>
+            ${initial}
+          </div>
+        </div>
+        <div class="participant-name">
+          <span class="name-text">${escapeHtml(name)}</span>
+          <span class="muted-icon hidden" title="Muted">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2c0 .76-.12 1.5-.35 2.18"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </span>
+        </div>
+      `;
+
+      $videoGrid.appendChild(tile);
+      updateGridLayout();
+      return tile;
+    }
+
+    function addLocalParticipantTile() {
+      const localParticipant = room.localParticipant;
+      const identity = localParticipant.identity;
+      const name = localParticipant.name || localParticipant.identity || participantName;
+      const initial = getInitial(name);
+
+      let tile = getTile(identity);
+      if (tile) return tile;
+
+      tile = document.createElement('div');
+      tile.className = 'participant-tile local';
+      tile.dataset.identity = identity;
+      tile.innerHTML = `
+        <div class="no-video">
+          <div class="avatar">
+            <div class="avatar-ring"></div>
+            ${initial}
+          </div>
+        </div>
+        <div class="participant-name">
+          <span class="name-text">${escapeHtml(name)}</span>
+          <span class="you-badge">You</span>
+          <span class="muted-icon hidden" title="Muted">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2c0 .76-.12 1.5-.35 2.18"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </span>
+        </div>
+      `;
+
+      // Insert local tile first
+      $videoGrid.insertBefore(tile, $videoGrid.firstChild);
+
+      // Attach local video if available
+      const camPub = localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+      if (camPub && camPub.track) {
+        const videoEl = camPub.track.attach();
+        videoEl.style.width = '100%';
+        videoEl.style.height = '100%';
+        videoEl.style.objectFit = 'cover';
+        videoEl.style.transform = 'scaleX(-1)'; // Mirror local video
+        const noVideo = tile.querySelector('.no-video');
+        if (noVideo) noVideo.classList.add('hidden');
+        tile.insertBefore(videoEl, tile.querySelector('.participant-name'));
+      }
+
+      // Listen for local track published to update tile
+      room.localParticipant.on('localTrackPublished', (publication) => {
+        if (publication.kind === 'video') {
+          const track = publication.track;
+          if (track) {
+            const videoEl = track.attach();
+            videoEl.style.width = '100%';
+            videoEl.style.height = '100%';
+            videoEl.style.objectFit = 'cover';
+            videoEl.style.transform = 'scaleX(-1)';
+            const noVideo = tile.querySelector('.no-video');
+            if (noVideo) noVideo.classList.add('hidden');
+            tile.querySelectorAll('video').forEach(v => v.remove());
+            tile.insertBefore(videoEl, tile.querySelector('.participant-name'));
+          }
+        }
+      });
+
+      room.localParticipant.on('localTrackUnpublished', (publication) => {
+        if (publication.kind === 'video') {
+          tile.querySelectorAll('video').forEach(v => v.remove());
+          const noVideo = tile.querySelector('.no-video');
+          if (noVideo) noVideo.classList.remove('hidden');
+        }
+      });
+
+      updateGridLayout();
+      return tile;
+    }
+
+    function removeParticipantTile(identity) {
+      const tile = getTile(identity);
+      if (tile) {
+        tile.style.transition = 'opacity 0.3s, transform 0.3s';
+        tile.style.opacity = '0';
+        tile.style.transform = 'scale(0.9)';
+        setTimeout(() => {
+          tile.remove();
+          updateGridLayout();
+        }, 300);
+      }
+    }
+
+    function getTile(identity) {
+      return $videoGrid.querySelector(`[data-identity="${CSS.escape(identity)}"]`);
+    }
+
+    function updateGridLayout() {
+      const count = $videoGrid.children.length;
+      $videoGrid.dataset.count = Math.min(count, 9).toString();
+    }
+
+    function updateMuteIndicator(identity, muted) {
+      const tile = getTile(identity);
+      if (!tile) return;
+      const icon = tile.querySelector('.muted-icon');
+      if (icon) {
+        icon.classList.toggle('hidden', !muted);
+      }
+    }
+
+    function updateParticipantCount() {
+      const count = $videoGrid.children.length;
+      document.getElementById('participantCountText').textContent = count;
+    }
+
+    // ─── Agent Status ───────────────────────────────────────────
+    function setAgentStatus(state, text) {
+      const el = document.getElementById('agentStatus');
+      el.className = 'agent-status ' + state;
+      document.getElementById('agentStatusText').textContent = text;
+    }
+
+    // ─── Transcript ─────────────────────────────────────────────
+    function addTranscript(speaker, text) {
+      if (!text || !text.trim()) return;
+
+      $transcriptEmpty.classList.add('hidden');
+
+      const isAgentSpeaker = speaker.toLowerCase().includes('agent') ||
+                             speaker.toLowerCase().includes('vocal') ||
+                             speaker.toLowerCase().includes('deepvoice') ||
+                             speaker.toLowerCase().includes('bot');
+
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'transcript-msg ' + (isAgentSpeaker ? 'agent' : 'user');
+
+      const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      msgDiv.innerHTML = `
+        <div class="msg-sender">${escapeHtml(speaker)}</div>
+        <div class="msg-text">${escapeHtml(text)}</div>
+        <div class="msg-time">${time}</div>
+      `;
+
+      $transcriptMessages.appendChild(msgDiv);
+      $transcriptMessages.scrollTop = $transcriptMessages.scrollHeight;
+    }
+
+    // ─── Controls ───────────────────────────────────────────────
+    async function toggleMic() {
+      if (!room) return;
+      micEnabled = !micEnabled;
+      try {
+        await room.localParticipant.setMicrophoneEnabled(micEnabled);
+      } catch (e) {
+        console.warn('Failed to toggle mic:', e);
+        micEnabled = !micEnabled; // Revert
+      }
+      updateMicUI();
+
+      // Update local tile mute indicator
+      const localIdentity = room.localParticipant.identity;
+      updateMuteIndicator(localIdentity, !micEnabled);
+    }
+
+    function updateMicUI() {
+      const btn = document.getElementById('btnMic');
+      const onIcon = document.getElementById('micOnIcon');
+      const offIcon = document.getElementById('micOffIcon');
+      const tooltip = document.getElementById('micTooltip');
+
+      if (micEnabled) {
+        btn.classList.remove('muted');
+        btn.classList.add('active');
+        onIcon.classList.remove('hidden');
+        offIcon.classList.add('hidden');
+        tooltip.textContent = 'Mute';
+      } else {
+        btn.classList.add('muted');
+        btn.classList.remove('active');
+        onIcon.classList.add('hidden');
+        offIcon.classList.remove('hidden');
+        tooltip.textContent = 'Unmute';
+      }
+    }
+
+    async function toggleCamera() {
+      if (!room) return;
+      cameraEnabled = !cameraEnabled;
+      try {
+        await room.localParticipant.setCameraEnabled(cameraEnabled);
+      } catch (e) {
+        console.warn('Failed to toggle camera:', e);
+        cameraEnabled = !cameraEnabled; // Revert
+      }
+      updateCameraUI();
+
+      // Update local tile
+      const localIdentity = room.localParticipant.identity;
+      const tile = getTile(localIdentity);
+      if (tile) {
+        const noVideo = tile.querySelector('.no-video');
+        if (cameraEnabled) {
+          // Video element will be attached via the localTrackPublished event
+        } else {
+          tile.querySelectorAll('video').forEach(v => v.remove());
+          if (noVideo) noVideo.classList.remove('hidden');
+        }
+      }
+    }
+
+    function updateCameraUI() {
+      const btn = document.getElementById('btnCamera');
+      const onIcon = document.getElementById('camOnIcon');
+      const offIcon = document.getElementById('camOffIcon');
+      const tooltip = document.getElementById('cameraTooltip');
+
+      if (cameraEnabled) {
+        btn.classList.remove('muted');
+        btn.classList.add('active');
+        onIcon.classList.remove('hidden');
+        offIcon.classList.add('hidden');
+        tooltip.textContent = 'Turn off camera';
+      } else {
+        btn.classList.add('muted');
+        btn.classList.remove('active');
+        onIcon.classList.add('hidden');
+        offIcon.classList.remove('hidden');
+        tooltip.textContent = 'Turn on camera';
+      }
+    }
+
+    function toggleTranscript() {
+      transcriptOpen = !transcriptOpen;
+      $transcriptPanel.classList.toggle('collapsed', !transcriptOpen);
+      document.getElementById('btnTranscript').classList.toggle('panel-open', transcriptOpen);
+    }
+
+    async function leaveRoom() {
+      if (room) {
+        try {
+          await room.disconnect();
+        } catch (e) {
+          console.warn('Error disconnecting:', e);
+        }
+      }
+      // Redirect back to dashboard
+      window.location.href = '/';
+    }
+
+    // ─── Copy Room Link ─────────────────────────────────────────
+    async function copyRoomLink() {
+      const link = `${window.location.origin}/static/meet.html?room=${encodeURIComponent(roomName)}&name=Guest`;
+      try {
+        await navigator.clipboard.writeText(link);
+        const btn = document.getElementById('btnCopyLink');
+        btn.classList.add('copied');
+        btn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        `;
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            </svg>
+          `;
+        }, 2000);
+      } catch (e) {
+        console.warn('Failed to copy:', e);
+        // Fallback: select text
+        prompt('Copy this link:', link);
+      }
+    }
+
+    // ─── Utility ────────────────────────────────────────────────
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ─── Keyboard Shortcuts ─────────────────────────────────────
+    document.addEventListener('keydown', (e) => {
+      // Ctrl/Cmd + D = toggle mic
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        e.preventDefault();
+        toggleMic();
+      }
+      // Ctrl/Cmd + E = toggle camera
+      if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault();
+        toggleCamera();
+      }
+    });
+
+    // ─── Beforeunload Warning ───────────────────────────────────
+    window.addEventListener('beforeunload', (e) => {
+      if (room && room.state === 'connected') {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+  </script>
+</body>
+</html>
