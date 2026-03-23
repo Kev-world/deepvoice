@@ -946,19 +946,15 @@
         }
       });
 
-      // ── Data Received (Transcripts) ───────────────────────────
-      room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant, kind, topic) => {
-        try {
-          const raw = new TextDecoder().decode(payload);
-          const data = JSON.parse(raw);
-
-          if (topic === 'client_actions' && data.type === 'client_action' && data.action === 'send_transcript') {
-            addTranscript(data.speaker || (participant ? participant.identity : 'Unknown'), data.text || data.content || '');
-          } else if (data.type === 'transcript' || data.action === 'send_transcript') {
-            addTranscript(data.speaker || (participant ? participant.identity : 'Unknown'), data.text || data.content || '');
+      // ── Transcription (via LiveKit agents SDK lk.transcription stream)
+      room.on(LivekitClient.RoomEvent.TranscriptionReceived, (segments, participant) => {
+        if (!segments || !segments.length) return;
+        for (const seg of segments) {
+          if (seg.final && seg.text && seg.text.trim()) {
+            const isAgent = participant && participant.identity && participant.identity.startsWith('agent');
+            const speaker = isAgent ? 'DeepVoice AI' : (participantName || 'You');
+            addTranscript(speaker, seg.text);
           }
-        } catch (e) {
-          console.warn('Failed to parse data message:', e);
         }
       });
 
@@ -1258,10 +1254,10 @@
 
       $transcriptEmpty.classList.add('hidden');
 
-      const isAgentSpeaker = speaker.toLowerCase().includes('agent') ||
-                             speaker.toLowerCase().includes('vocal') ||
-                             speaker.toLowerCase().includes('deepvoice') ||
-                             speaker.toLowerCase().includes('bot');
+      const s = speaker.toLowerCase();
+      const isAgentSpeaker = s.includes('agent') || s.includes('vocal') ||
+                             s.includes('deepvoice') || s.includes('bot') ||
+                             s.includes('ai');
 
       const msgDiv = document.createElement('div');
       msgDiv.className = 'transcript-msg ' + (isAgentSpeaker ? 'agent' : 'user');
