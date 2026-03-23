@@ -94,6 +94,53 @@
     .btn-copy:hover { color: var(--accent); }
     .btn-copy.copied { color: var(--green); }
 
+    .agent-switcher {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 16px;
+        padding-left: 16px;
+        border-left: 1px solid var(--border);
+    }
+    .agent-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+        border: 1px solid transparent;
+    }
+    .agent-badge:hover { border-color: var(--border); }
+    .agent-badge.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .agent-badge.active:hover { background: var(--accent-hover); }
+    .agent-badge .agent-dot {
+        width: 6px; height: 6px; border-radius: 50%;
+    }
+    .agent-badge .agent-dot.orchestrator { background: var(--accent); }
+    .agent-badge .agent-dot.frontend { background: #f59e0b; }
+    .agent-badge .agent-dot.backend { background: #22c55e; }
+    .handoff-overlay {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7); display: flex; align-items: center;
+        justify-content: center; z-index: 100;
+    }
+    .handoff-card {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 32px; text-align: center;
+        max-width: 400px;
+    }
+    .handoff-card h3 { margin-bottom: 8px; font-size: 18px; }
+    .handoff-card p { color: var(--text-dim); font-size: 14px; margin-bottom: 20px; }
+    .handoff-spinner {
+        width: 32px; height: 32px; border: 3px solid var(--border);
+        border-top-color: var(--accent); border-radius: 50%;
+        animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+    }
+
     .top-bar-right {
       display: flex;
       align-items: center;
@@ -707,6 +754,20 @@
             </svg>
           </button>
         </div>
+        <div class="agent-switcher">
+            <div class="agent-badge active" data-agent-id="orchestrator" onclick="switchAgent('orchestrator')" title="General meeting assistant">
+                <span class="agent-dot orchestrator"></span>
+                General
+            </div>
+            <div class="agent-badge" data-agent-id="frontend" onclick="switchAgent('frontend')" title="Frontend specialist">
+                <span class="agent-dot frontend"></span>
+                Frontend
+            </div>
+            <div class="agent-badge" data-agent-id="backend" onclick="switchAgent('backend')" title="Backend specialist">
+                <span class="agent-dot backend"></span>
+                Backend
+            </div>
+        </div>
       </div>
       <div class="top-bar-right">
         <div class="agent-status" id="agentStatus">
@@ -803,6 +864,7 @@
     let transcriptOpen = true;
     let participants = new Map(); // identity -> { tile element, tracks, etc }
     let agentIdentity = null;
+    let handoffInProgress = false;
 
     // ─── URL Params ─────────────────────────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
@@ -830,7 +892,7 @@
         const tokenResp = await fetch('/api/meet/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ room_name: roomName, participant_name: participantName }),
+          body: JSON.stringify({ room_name: roomName, participant_name: participantName, agent_id: new URLSearchParams(window.location.search).get('agent') || 'orchestrator' }),
         });
 
         if (!tokenResp.ok) {
@@ -974,7 +1036,9 @@
       // ── Connection State ──────────────────────────────────────
       room.on(LivekitClient.RoomEvent.Disconnected, (reason) => {
         console.log('Disconnected from room:', reason);
-        showError('Disconnected', 'You have been disconnected from the meeting. ' + (reason || ''));
+        if (!handoffInProgress) {
+          showError('Disconnected', 'You have been disconnected from the meeting. ' + (reason || ''));
+        }
       });
 
       room.on(LivekitClient.RoomEvent.Reconnecting, () => {
@@ -1016,6 +1080,10 @@
 
       // Show meeting UI
       showMeeting();
+
+      // Track initial agent from URL
+      currentAgentId = new URLSearchParams(window.location.search).get('agent') || 'orchestrator';
+      updateAgentSwitcher();
 
       // Add local participant tile
       addLocalParticipantTile();
@@ -1378,7 +1446,7 @@
 
     // ─── Copy Room Link ─────────────────────────────────────────
     async function copyRoomLink() {
-      const link = `${window.location.origin}/static/meet.html?room=${encodeURIComponent(roomName)}&name=Guest`;
+      const link = `${window.location.origin}/meet.html?room=${encodeURIComponent(roomName)}&name=Guest`;
       try {
         await navigator.clipboard.writeText(link);
         const btn = document.getElementById('btnCopyLink');
@@ -1401,6 +1469,101 @@
         // Fallback: select text
         prompt('Copy this link:', link);
       }
+    }
+
+    // ─── Agent Handoff ─────────────────────────────────────────
+    let currentAgentId = 'orchestrator';
+    const agentColors = { orchestrator: '#6366f1', frontend: '#f59e0b', backend: '#22c55e' };
+    const agentLabels = { orchestrator: 'Orchestrator', frontend: 'Frontend', backend: 'Backend' };
+
+    async function switchAgent(agentId) {
+        if (agentId === currentAgentId) return;
+
+        // Show handoff overlay
+        showHandoffOverlay(agentLabels[agentId] || agentId);
+
+        try {
+            // Request token for the new agent
+            const resp = await fetch('/api/meet/handoff', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    room_code: roomName,
+                    agent_id: agentId,
+                    participant_name: participantName,
+                    context: `Switching from ${currentAgentId} to ${agentId}`,
+                }),
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.detail || 'Handoff failed');
+            }
+
+            const data = await resp.json();
+
+            // Disconnect from current room
+            if (room) {
+                handoffInProgress = true;
+                await room.disconnect();
+                handoffInProgress = false;
+            }
+
+            // Clear existing participant tiles (except local)
+            document.querySelectorAll('.participant-tile:not([data-identity="local"])').forEach(el => el.remove());
+
+            // Connect to new room with specialist agent
+            await room.connect(data.livekit_url, data.token);
+
+            // Re-enable mic
+            try {
+                await room.localParticipant.setMicrophoneEnabled(micEnabled);
+            } catch(e) { console.warn('Failed to re-enable mic:', e); }
+
+            // Update UI
+            currentAgentId = agentId;
+            updateAgentSwitcher();
+            addTranscript('System', `Switched to ${data.agent_name} agent.`);
+
+            // Remove overlay
+            hideHandoffOverlay();
+
+        } catch (e) {
+            handoffInProgress = false;
+            hideHandoffOverlay();
+            console.error('Handoff failed:', e);
+            addTranscript('System', `Failed to switch agent: ${e.message}`);
+        }
+    }
+
+    function showHandoffOverlay(agentName) {
+        let overlay = document.getElementById('handoffOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'handoffOverlay';
+            overlay.className = 'handoff-overlay';
+            document.body.appendChild(overlay);
+        }
+        overlay.innerHTML = `
+            <div class="handoff-card">
+                <div class="handoff-spinner"></div>
+                <h3>Connecting to ${agentName}</h3>
+                <p>Transferring you to the specialist agent...</p>
+            </div>
+        `;
+        overlay.style.display = 'flex';
+    }
+
+    function hideHandoffOverlay() {
+        const overlay = document.getElementById('handoffOverlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    function updateAgentSwitcher() {
+        document.querySelectorAll('.agent-badge').forEach(badge => {
+            const id = badge.dataset.agentId;
+            badge.classList.toggle('active', id === currentAgentId);
+        });
     }
 
     // ─── Utility ────────────────────────────────────────────────

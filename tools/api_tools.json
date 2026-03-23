@@ -15,7 +15,7 @@
       },
       {
         "name": "n_results",
-        "type": "integer",
+        "type": "number",
         "description": "Number of results to return (default 5)",
         "required": false,
         "location": "body"
@@ -38,7 +38,7 @@
       },
       {
         "name": "n_results",
-        "type": "integer",
+        "type": "number",
         "description": "Number of results to return (default 10)",
         "required": false,
         "location": "body"
@@ -61,7 +61,7 @@
       },
       {
         "name": "n_results",
-        "type": "integer",
+        "type": "number",
         "description": "Number of results to return (default 5)",
         "required": false,
         "location": "body"
@@ -84,11 +84,19 @@
       },
       {
         "name": "n_results",
-        "type": "integer",
+        "type": "number",
         "description": "Number of results to return (default 5)",
         "required": false,
         "location": "body"
       }
     ]
+  },
+  {
+    "id": "5",
+    "name": "list_specialists",
+    "description": "List available specialist agents that the user can switch to for deeper domain expertise. Call this when the user asks what specialists are available or when you want to suggest a handoff.",
+    "method": "GET",
+    "url": "https://YOUR_DOMAIN/api/meet/agents",
+    "parameters": []
   }
 ]
