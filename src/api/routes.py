@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -12,8 +13,10 @@ from src.api.models import (
     HealthResponse,
     IndexGitHistoryRequest,
     IndexRepositoryRequest,
+    IndexSitemapRequest,
     IndexStatsResponse,
     IndexStatusResponse,
+    IndexUrlRequest,
     RAGCodeQueryRequest,
     RAGDocsQueryRequest,
     RAGGitQueryRequest,
@@ -25,6 +28,7 @@ from src.config import settings
 from src.rag.store import KnowledgeStore
 from src.rag.indexer import RepositoryIndexer
 from src.rag.retriever import KnowledgeRetriever
+from src.rag.web_indexer import WebIndexer
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +61,14 @@ def _get_indexer(request: Request) -> RepositoryIndexer:
     if indexer is None:
         raise HTTPException(status_code=503, detail="Indexer service is not initialized yet.")
     return indexer
+
+
+def _get_web_indexer(request: Request) -> WebIndexer:
+    """Return the WebIndexer stored on app.state, or raise 503."""
+    web_indexer: WebIndexer | None = getattr(request.app.state, "web_indexer", None)
+    if web_indexer is None:
+        raise HTTPException(status_code=503, detail="Web indexer service is not initialized yet.")
+    return web_indexer
 
 
 def _build_rag_response(results: list[dict]) -> RAGQueryResponse:
@@ -222,6 +234,58 @@ async def index_git_history(
     return IndexStatusResponse(
         status="indexing",
         message=f"Git history indexing started for '{body.repo_path}' (last {body.days} days).",
+    )
+
+
+def _run_index_urls(web_indexer: WebIndexer, urls: list[str], collection: str) -> None:
+    """Background task: index web URLs into the knowledge store."""
+    try:
+        logger.info("Starting URL indexing: %d URLs -> %s", len(urls), collection)
+        results = asyncio.run(web_indexer.index_urls(urls, collection=collection))
+        ok = sum(1 for r in results if r.get("status") == "ok")
+        logger.info("URL indexing complete: %d/%d succeeded", ok, len(results))
+    except Exception:
+        logger.exception("URL indexing failed")
+
+
+def _run_index_sitemap(web_indexer: WebIndexer, sitemap_url: str, collection: str, max_pages: int) -> None:
+    """Background task: index all pages from a sitemap into the knowledge store."""
+    try:
+        logger.info("Starting sitemap indexing: %s", sitemap_url)
+        results = asyncio.run(web_indexer.index_sitemap(sitemap_url, collection=collection, max_pages=max_pages))
+        ok = sum(1 for r in results if r.get("status") == "ok")
+        logger.info("Sitemap indexing complete: %d pages indexed", ok)
+    except Exception:
+        logger.exception("Sitemap indexing failed")
+
+
+@router.post("/index/url", response_model=IndexStatusResponse)
+async def index_url(
+    body: IndexUrlRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+) -> IndexStatusResponse:
+    """Index one or more web URLs into the knowledge base."""
+    web_indexer = _get_web_indexer(request)
+    background_tasks.add_task(_run_index_urls, web_indexer, body.urls, body.collection)
+    return IndexStatusResponse(
+        status="indexing",
+        message=f"Indexing {len(body.urls)} URLs into {body.collection} collection.",
+    )
+
+
+@router.post("/index/sitemap", response_model=IndexStatusResponse)
+async def index_sitemap(
+    body: IndexSitemapRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+) -> IndexStatusResponse:
+    """Index all pages from a sitemap.xml URL."""
+    web_indexer = _get_web_indexer(request)
+    background_tasks.add_task(_run_index_sitemap, web_indexer, body.sitemap_url, body.collection, body.max_pages)
+    return IndexStatusResponse(
+        status="indexing",
+        message="Indexing sitemap...",
     )
 
 

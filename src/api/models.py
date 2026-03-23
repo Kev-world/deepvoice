@@ -77,6 +77,21 @@ class IndexStatusResponse(BaseModel):
     message: str
 
 
+class IndexUrlRequest(BaseModel):
+    """Request to index one or more web URLs."""
+
+    urls: list[str] = Field(..., description="List of URLs to index")
+    collection: str = Field(default="docs", description="Target collection")
+
+
+class IndexSitemapRequest(BaseModel):
+    """Request to index all pages from a sitemap.xml URL."""
+
+    sitemap_url: str = Field(..., description="URL of the sitemap.xml")
+    collection: str = Field(default="docs", description="Target collection")
+    max_pages: int = Field(default=50, ge=1, le=200, description="Max pages to index")
+
+
 class IndexStatsResponse(BaseModel):
     """Statistics about indexed collections."""
 

@@ -21,6 +21,7 @@ from src.rag.embeddings import EmbeddingService
 from src.rag.store import KnowledgeStore
 from src.rag.indexer import RepositoryIndexer
 from src.rag.retriever import KnowledgeRetriever
+from src.rag.web_indexer import WebIndexer
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.store = store
         app.state.indexer = indexer
         app.state.retriever = retriever
+        web_indexer = WebIndexer(store=store)
+        app.state.web_indexer = web_indexer
         logger.info("RAG services initialized successfully.")
     except Exception:
         logger.exception("Failed to initialize RAG services — endpoints will return 503.")

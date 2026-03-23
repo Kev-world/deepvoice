@@ -370,11 +370,134 @@
     .info-card { animation-delay: 0.08s; }
     .agent-status { animation-delay: 0.16s; }
 
+    /* Knowledge Base card */
+    .kb-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 16px;
+      animation: fadeUp 0.4s ease-out both;
+      animation-delay: 0.12s;
+    }
+    .kb-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 18px;
+      color: var(--text);
+    }
+    .kb-section-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .kb-card textarea {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      line-height: 1.6;
+      outline: none;
+      transition: border-color 0.15s;
+      resize: vertical;
+      min-height: 80px;
+    }
+    .kb-card textarea:focus {
+      border-color: var(--accent);
+    }
+    .kb-card textarea::placeholder {
+      color: #555568;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    }
+    .kb-btn-row {
+      margin-top: 10px;
+    }
+    .sitemap-row {
+      display: flex;
+      gap: 10px;
+    }
+    .sitemap-row input {
+      flex: 1;
+      padding: 11px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .sitemap-row input:focus {
+      border-color: var(--accent);
+    }
+    .sitemap-row input::placeholder {
+      color: #555568;
+    }
+    .btn-kb {
+      background: var(--accent);
+      color: #fff;
+      padding: 11px 20px;
+    }
+    .btn-kb:hover:not(:disabled) {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+    .btn-kb:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    .btn-stats {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 10px 20px;
+    }
+    .btn-stats:hover:not(:disabled) {
+      background: var(--border);
+      border-color: var(--text-dim);
+    }
+    .kb-stats-display {
+      margin-top: 10px;
+      padding: 10px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      color: var(--text-dim);
+      display: none;
+    }
+    .kb-stats-display.visible {
+      display: block;
+    }
+    .kb-status {
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--text-dim);
+      display: none;
+    }
+    .kb-status.visible {
+      display: block;
+    }
+    .kb-status.success {
+      color: var(--green);
+    }
+    .kb-status.error {
+      color: var(--red);
+    }
+
     /* Responsive */
     @media (max-width: 520px) {
       .container { padding: 24px 16px; }
       .header h1 { font-size: 28px; }
       .card { padding: 20px; }
+      .kb-card { padding: 20px; }
     }
   </style>
 </head>
@@ -440,6 +563,31 @@
           <span>Ask about code, documentation, git history, and more by voice</span>
         </li>
       </ul>
+    </div>
+
+    <!-- Knowledge Base -->
+    <div class="kb-card">
+      <h3>Knowledge Base</h3>
+
+      <label class="kb-section-label" for="kbUrls">Add Documentation URLs</label>
+      <textarea id="kbUrls" rows="4" placeholder="https://docs.example.com/getting-started&#10;https://wiki.example.com/api-reference"></textarea>
+      <div class="kb-btn-row">
+        <button class="btn btn-kb" id="btnIndexUrls" onclick="indexUrls()">Index URLs</button>
+      </div>
+
+      <div class="divider"><span>Or Index a Sitemap</span></div>
+
+      <div class="sitemap-row">
+        <input type="text" id="kbSitemapUrl" placeholder="https://docs.example.com/sitemap.xml" />
+        <button class="btn btn-kb" id="btnIndexSitemap" onclick="indexSitemap()">Index</button>
+      </div>
+
+      <div class="divider"><span>Stats</span></div>
+
+      <button class="btn btn-stats" id="btnShowStats" onclick="showKbStats()">Show Stats</button>
+      <div class="kb-stats-display" id="kbStatsDisplay"></div>
+
+      <div class="kb-status" id="kbStatus"></div>
     </div>
 
     <!-- Agent status -->
@@ -629,6 +777,136 @@
 
     // Re-check health every 30 seconds
     setInterval(checkAgentHealth, 30000);
+
+    // ── Knowledge Base helpers ────────────────────────────────
+    function setKbStatus(message, type) {
+      const el = document.getElementById('kbStatus');
+      el.textContent = message;
+      el.className = 'kb-status visible' + (type ? ' ' + type : '');
+    }
+
+    function clearKbStatus() {
+      const el = document.getElementById('kbStatus');
+      el.className = 'kb-status';
+      el.textContent = '';
+    }
+
+    async function indexUrls() {
+      const textarea = document.getElementById('kbUrls');
+      const raw = textarea.value.trim();
+      if (!raw) {
+        setKbStatus('Please enter at least one URL.', 'error');
+        return;
+      }
+
+      const urls = raw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+      if (urls.length === 0) {
+        setKbStatus('Please enter at least one URL.', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btnIndexUrls');
+      btn.disabled = true;
+      setKbStatus(`Indexing ${urls.length} URL${urls.length > 1 ? 's' : ''}...`, '');
+
+      try {
+        const resp = await fetch('/api/index/url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls, collection: 'docs' }),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(text || `HTTP ${resp.status}`);
+        }
+        const data = await resp.json().catch(() => null);
+        setKbStatus(
+          data && data.message
+            ? data.message
+            : `Successfully started indexing ${urls.length} URL${urls.length > 1 ? 's' : ''}.`,
+          'success'
+        );
+      } catch (err) {
+        setKbStatus(`Error: ${err.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function indexSitemap() {
+      const input = document.getElementById('kbSitemapUrl');
+      const sitemapUrl = input.value.trim();
+      if (!sitemapUrl) {
+        setKbStatus('Please enter a sitemap URL.', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btnIndexSitemap');
+      btn.disabled = true;
+      setKbStatus('Indexing sitemap...', '');
+
+      try {
+        const resp = await fetch('/api/index/sitemap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sitemap_url: sitemapUrl, collection: 'docs', max_pages: 50 }),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(text || `HTTP ${resp.status}`);
+        }
+        const data = await resp.json().catch(() => null);
+        setKbStatus(
+          data && data.message
+            ? data.message
+            : 'Successfully started indexing sitemap.',
+          'success'
+        );
+      } catch (err) {
+        setKbStatus(`Error: ${err.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function showKbStats() {
+      const btn = document.getElementById('btnShowStats');
+      const display = document.getElementById('kbStatsDisplay');
+      btn.disabled = true;
+
+      try {
+        const resp = await fetch('/api/index/stats', {
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
+        const data = await resp.json();
+        // Render collection counts
+        if (data && data.collections && typeof data.collections === 'object') {
+          const parts = Object.entries(data.collections)
+            .map(([name, count]) => `${name}: ${count}`)
+            .join('  |  ');
+          display.textContent = parts || 'No collections found.';
+        } else if (data && typeof data === 'object') {
+          // Fallback: render whatever keys are present
+          const parts = Object.entries(data)
+            .filter(([, v]) => typeof v === 'number')
+            .map(([k, v]) => `${k}: ${v}`)
+            .join('  |  ');
+          display.textContent = parts || JSON.stringify(data);
+        } else {
+          display.textContent = 'No stats available.';
+        }
+        display.classList.add('visible');
+        clearKbStatus();
+      } catch (err) {
+        display.classList.remove('visible');
+        setKbStatus(`Error fetching stats: ${err.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
   </script>
 </body>
 </html>
